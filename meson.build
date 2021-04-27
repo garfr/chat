@@ -6,12 +6,13 @@ src = [
 
 #inc = include_directories('include')
 
-libtls = dependency('libtls')
+tls = dependency('libtls')
+msgpack = dependency('msgpack')
 
 chat = executable(
   'chat',
   src,
   c_args : ['-Wextra', '-Werror', '-g', '-std=c99', '-pedantic'],
-  dependencies: [libtls],
+  dependencies: [tls, msgpack],
   #include_directories : [inc]
 )
