@@ -110,7 +110,9 @@ static void scan_fd(size_t fd_index) {
 
     if (bytes_read) {
       for (size_t j = 1; j <= num_fds; j++) {
-        send(pfds[j].fd, msg_buf, bytes_read, 0);
+        if (j != fd_index) {
+          send(pfds[j].fd, msg_buf, bytes_read, 0);
+        }
       }
       printf("%.*s", (int)bytes_read, msg_buf);
     }
