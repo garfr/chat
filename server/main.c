@@ -107,10 +107,7 @@ static void add_fd(int fd) {
 static void scan_fd(size_t fd_index) {
   if (pfds[fd_index].revents & POLLIN) {
     size_t bytes_read = recv(pfds[fd_index].fd, msg_buf, MSG_BUF_SZ, 0);
-    if (recv(pfds[fd_index].fd, msg_buf, MSG_BUF_SZ, 0) != 0) {
-      printf("Received message longer than %u.\n", MSG_BUF_SZ);
-      exit(EXIT_FAILURE);
-    }
+
     if (bytes_read) {
       for (size_t j = 1; j <= num_fds; j++) {
         send(pfds[j].fd, msg_buf, bytes_read, 0);
