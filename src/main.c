@@ -16,6 +16,12 @@
 #include <unistd.h>
 
 #define PORT_USED 4433
+#define MSG_BUF_SZ 1000
+#define POLL_MAX_FDS 10
+
+uint8_t msg_buf[MSG_BUF_SZ];
+struct pollfd pfds[POLL_MAX_FDS + 1];
+size_t num_fds;
 
 static int create_socket(int port) {
   struct sockaddr_in addr;
@@ -85,65 +91,64 @@ static void disable_core_dumps(void) {
   setrlimit(RLIMIT_CORE, &rlim);
 }
 
+static void add_fd(int fd) {
+  if (num_fds + 1 > POLL_MAX_FDS) {
+    printf("Max number of file descriptors reached.\n");
+    exit(EXIT_FAILURE);
+  }
+
+  num_fds++;
+  pfds[num_fds].fd = fd;
+  pfds[num_fds].events = POLLIN;
+}
+
+static void scan_fd(size_t fd_index) {
+  if (pfds[fd_index].revents & POLLIN) {
+    size_t bytes_read = recv(pfds[fd_index].fd, msg_buf, MSG_BUF_SZ, 0);
+    if (bytes_read) {
+      for (size_t j = 1; j <= num_fds; j++) {
+        send(pfds[j].fd, msg_buf, bytes_read, 0);
+      }
+      printf("%.*s", (int)bytes_read, msg_buf);
+    }
+  }
+}
+
 int main() {
   disable_core_dumps();
 
   clean_file_descriptors();
 
+  num_fds = 0;
+
   int server_fd = create_socket(PORT_USED);
 
-  const char reply[] = "beans\n";
-
-  int client1_fd = accept(server_fd, NULL, 0);
-  if (client1_fd < 0) {
-    fprintf(stderr, "Unable to accept connection on port %d: %s.\n", PORT_USED,
-            strerror(errno));
-    exit(EXIT_FAILURE);
-  }
-
-  int client2_fd = accept(server_fd, NULL, 0);
-  if (client2_fd < 0) {
-    fprintf(stderr, "Unable to accept connection on port %d: %s.\n", PORT_USED,
-            strerror(errno));
-    exit(EXIT_FAILURE);
-  }
-
-  send(client1_fd, reply, strlen(reply), 0);
-  send(client2_fd, reply, strlen(reply), 0);
-
-  struct pollfd pfds[2];
-  size_t num_fds = 2;
-  pfds[0].fd = client1_fd;
+  pfds[0].fd = server_fd;
   pfds[0].events = POLLIN;
-  pfds[1].fd = client2_fd;
-  pfds[1].events = POLLIN;
-
-#define MSG_BUF_SZ 1000
-  uint8_t msg_buf[MSG_BUF_SZ];
 
   while (1) {
-    int num_events = poll(pfds, 2, -1);
-
+    int num_events = poll(pfds, num_fds + 1, -1);
     if (num_events == -1) {
       fprintf(stderr, "Unable to poll file descriptors: %s.\n",
               strerror(errno));
       exit(EXIT_FAILURE);
     }
-    for (int i = 0; i < 2; i++) {
-      if (pfds[i].revents & POLLIN) {
-        size_t bytes_read = recv(pfds[i].fd, msg_buf, MSG_BUF_SZ, 0);
-        if (bytes_read) {
-          for (size_t j = 0; j < num_fds; j++) {
-            send(pfds[j].fd, msg_buf, bytes_read, 0);
-          }
-          printf("%.*s", (int)bytes_read, msg_buf);
-        }
+
+    if (pfds[0].revents & POLLIN) {
+      add_fd(accept(pfds[0].fd, NULL, 0));
+      num_events--;
+    }
+
+    if (num_events != 0) {
+      for (size_t i = 1; i <= num_fds; i++) {
+        scan_fd(i);
       }
     }
   }
 
-  close(client1_fd);
-  close(client2_fd);
+  for (size_t i = 1; i < num_fds; i++) {
+    close(pfds[i].fd);
+  }
 
   close(server_fd);
   return 0;
