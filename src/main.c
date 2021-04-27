@@ -23,20 +23,18 @@ static int create_socket(int port) {
 
   int fd = socket(addr.sin_family, SOCK_STREAM, 0);
   if (fd < 0) {
-    fprintf(stderr, "Unable to open socket.\n");
+    fprintf(stderr, "Unable to open socket: %s.\n", strerror(errno));
     exit(EXIT_FAILURE);
   }
 
   if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-    fprintf(stderr, "Unable to bind to port %d.\n", port);
+    fprintf(stderr, "Unable to bind to port %d: %s.\n", port, strerror(errno));
     exit(EXIT_FAILURE);
   }
 
-  int yes = 1;
-  setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
-
   if (listen(fd, 1) < 0) {
-    fprintf(stderr, "Unable to listen on port %d.\n", port);
+    fprintf(stderr, "Unable to listen on port %d: %s.\n", port,
+            strerror(errno));
     exit(EXIT_FAILURE);
   }
 
@@ -52,7 +50,7 @@ static int open_devnul(int fd) {
   return (f && fileno(f) == fd);
 }
 
-/* Closes all file descriptors not needed, and pipes 0, 1, 2 to /dev/null if
+/* Closes all file descriptors > 3, and pipes 0, 1, 2 to /dev/null if
  * they are invalid */
 static void clean_file_descriptors(void) {
   int fd, fds;
@@ -89,7 +87,8 @@ int main() {
 
     int client_fd = accept(sock_fd, (struct sockaddr *)&addr, &len);
     if (client_fd < 0) {
-      fprintf(stderr, "Unable to accept connection on port %d.\n", PORT_USED);
+      fprintf(stderr, "Unable to accept connection on port %d: %s.\n",
+              PORT_USED, strerror(errno));
       exit(EXIT_FAILURE);
     }
 
