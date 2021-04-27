@@ -1,18 +1,26 @@
 project('chat', 'c')
 
-src = [
-  'src/main.c',
+server_src = [
+  'server/main.c',
 ]
 
-#inc = include_directories('include')
+client_src = [
+  'client/main.c',
+]
 
 tls = dependency('libtls')
 msgpack = dependency('msgpack')
 
-chat = executable(
-  'chat',
-  src,
+server = executable(
+  'server',
+  server_src,
   c_args : ['-Wextra', '-Werror', '-g', '-std=c99', '-pedantic'],
   dependencies: [tls, msgpack],
-  #include_directories : [inc]
+)
+
+client = executable(
+  'client',
+  client_src,
+  c_args : ['-Wextra', '-Werror', '-g', '-std=c99', '-pedantic'],
+  dependencies: [tls, msgpack],
 )
