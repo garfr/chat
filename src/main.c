@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/resource.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -42,7 +43,7 @@ static int create_socket(int port) {
 }
 
 /* Associates standard file descriptor with /dev/null */
-static int open_devnul(int fd) {
+static int open_devnull(int fd) {
   FILE *f = 0;
   if (fd == 0) f = freopen(_PATH_DEVNULL, "rb", stdin);
   if (fd == 1) f = freopen(_PATH_DEVNULL, "wb", stdout);
@@ -67,7 +68,7 @@ static void clean_file_descriptors(void) {
   }
 
   for (fd = 0; fd < 3; fd++) {
-    if (fstat(fd, &st) == -1 && (errno != EBADF || !open_devnul(fd))) {
+    if (fstat(fd, &st) == -1 && (errno != EBADF || !open_devnull(fd))) {
       /* Unable to get information about the default file descriptors, abort the
        * proram before security vunerabilities appear */
       abort();
@@ -75,17 +76,27 @@ static void clean_file_descriptors(void) {
   }
 }
 
+/* If the program crashes, the memory dump files could be written, possibly
+ * exposing confidential info */
+static void disable_core_dumps(void) {
+  struct rlimit rlim;
+  rlim.rlim_cur = rlim.rlim_max = 0;
+  setrlimit(RLIMIT_CORE, &rlim);
+}
+
 int main() {
+  disable_core_dumps();
+
   clean_file_descriptors();
 
-  int sock_fd = create_socket(PORT_USED);
+  int server_fd = create_socket(PORT_USED);
 
   for (;;) {
     struct sockaddr_in addr;
     socklen_t len = sizeof(addr);
     const char reply[] = "beans\n";
 
-    int client_fd = accept(sock_fd, (struct sockaddr *)&addr, &len);
+    int client_fd = accept(server_fd, (struct sockaddr *)&addr, &len);
     if (client_fd < 0) {
       fprintf(stderr, "Unable to accept connection on port %d: %s.\n",
               PORT_USED, strerror(errno));
@@ -96,7 +107,6 @@ int main() {
     close(client_fd);
   }
 
-  close(sock_fd);
-
+  close(server_fd);
   return 0;
 }
