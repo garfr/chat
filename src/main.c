@@ -29,7 +29,9 @@ static int create_socket(int port) {
   addr.sin_port = htons(port);
   addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
+  int option = 1;
   int fd = socket(addr.sin_family, SOCK_STREAM, 0);
+  setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
   if (fd < 0) {
     fprintf(stderr, "Unable to open socket: %s.\n", strerror(errno));
     exit(EXIT_FAILURE);
@@ -105,6 +107,10 @@ static void add_fd(int fd) {
 static void scan_fd(size_t fd_index) {
   if (pfds[fd_index].revents & POLLIN) {
     size_t bytes_read = recv(pfds[fd_index].fd, msg_buf, MSG_BUF_SZ, 0);
+    if (recv(pfds[fd_index].fd, msg_buf, MSG_BUF_SZ, 0) != 0) {
+      printf("Received message longer than %u.\n", MSG_BUF_SZ);
+      exit(EXIT_FAILURE);
+    }
     if (bytes_read) {
       for (size_t j = 1; j <= num_fds; j++) {
         send(pfds[j].fd, msg_buf, bytes_read, 0);
