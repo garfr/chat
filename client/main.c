@@ -97,7 +97,11 @@ int main(int argc, char* argv[]) {
     /* server */
     if (pfds[1].revents & POLLIN) {
       server_msg_len = recv(pfds[1].fd, server_msg, IN_MESSAGE_MAX, 0);
-      verbose_log("Read message from server.\n");
+      if (server_msg_len == 0) {
+        verbose_log("Connection with server lost.\n");
+        goto server_closed;
+      }
+      verbose_log("Read message from server %d.\n", server_msg_len);
     }
     if (pfds[1].revents & POLLOUT && has_message) {
       send(pfds[1].fd, stdin_msg, stdin_msg_len, 0);
@@ -106,15 +110,7 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  const char* msg = "beans\n";
-  while (1) {
-    ssize_t res = send(conn_fd, msg, sizeof(msg), 0);
-    if (res <= 0) {
-      printf("%zd.\n", res);
-      break;
-    }
-  }
-  printf("Hello, client.\n");
+server_closed:
 
   close(conn_fd);
 
