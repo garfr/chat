@@ -6,10 +6,12 @@
 #include <limits.h>
 #include <paths.h>
 #include <poll.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/resource.h>
+#include <sys/signalfd.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -18,9 +20,10 @@
 #define PORT_USED 4433
 #define MSG_BUF_SZ 1000
 #define POLL_MAX_FDS 10
+#define RESERVED_FDS 2
 
 uint8_t msg_buf[MSG_BUF_SZ];
-struct pollfd pfds[POLL_MAX_FDS + 1];
+struct pollfd pfds[POLL_MAX_FDS + RESERVED_FDS];
 size_t num_fds;
 
 static int create_socket(int port) {
@@ -94,14 +97,14 @@ static void disable_core_dumps(void) {
 }
 
 static void add_fd(int fd) {
-  if (num_fds + 1 > POLL_MAX_FDS) {
+  if (num_fds >= POLL_MAX_FDS) {
     printf("Max number of file descriptors reached.\n");
     exit(EXIT_FAILURE);
   }
 
+  pfds[num_fds + RESERVED_FDS].fd = fd;
+  pfds[num_fds + RESERVED_FDS].events = POLLIN;
   num_fds++;
-  pfds[num_fds].fd = fd;
-  pfds[num_fds].events = POLLIN;
 }
 
 static void scan_fd(size_t fd_index) {
@@ -119,6 +122,37 @@ static void scan_fd(size_t fd_index) {
   }
 }
 
+static int disable_sigint() {
+  sigset_t sig_mask;
+
+  sigemptyset(&sig_mask);
+  sigaddset(&sig_mask, SIGINT);
+
+  if (sigprocmask(SIG_BLOCK, &sig_mask, NULL) == -1) {
+    fprintf(stderr, "Unable to block sig int handler.\n");
+    exit(EXIT_FAILURE);
+  }
+
+  int sigint_fd = signalfd(-1, &sig_mask, 0);
+  if (sigint_fd == -1) {
+    fprintf(stderr, "Unable to create file descriptor from signal mask: %s.\n",
+            strerror(errno));
+    exit(EXIT_FAILURE);
+  }
+
+  return sigint_fd;
+}
+
+static void initialize_pfds() {
+  int server_fd = create_socket(PORT_USED);
+
+  pfds[0].fd = server_fd;
+  pfds[0].events = POLLIN;
+
+  pfds[1].fd = disable_sigint();
+  pfds[1].events = POLLIN;
+}
+
 int main() {
   disable_core_dumps();
 
@@ -126,35 +160,36 @@ int main() {
 
   num_fds = 0;
 
-  int server_fd = create_socket(PORT_USED);
-
-  pfds[0].fd = server_fd;
-  pfds[0].events = POLLIN;
+  initialize_pfds();
 
   while (1) {
-    int num_events = poll(pfds, num_fds + 1, -1);
+    int num_events = poll(pfds, num_fds + RESERVED_FDS, -1);
+
     if (num_events == -1) {
       fprintf(stderr, "Unable to poll file descriptors: %s.\n",
               strerror(errno));
       exit(EXIT_FAILURE);
     }
 
+    if (pfds[1].revents & POLLIN) {
+      goto done;
+    }
     if (pfds[0].revents & POLLIN) {
       add_fd(accept(pfds[0].fd, NULL, 0));
       num_events--;
     }
 
     if (num_events != 0) {
-      for (size_t i = 1; i <= num_fds; i++) {
+      for (size_t i = RESERVED_FDS; i <= num_fds + RESERVED_FDS; i++) {
         scan_fd(i);
       }
     }
   }
-
-  for (size_t i = 1; i < num_fds; i++) {
+done:
+  for (size_t i = RESERVED_FDS; i < num_fds + RESERVED_FDS; i++) {
     close(pfds[i].fd);
   }
 
-  close(server_fd);
+  close(pfds[0].fd);
   return 0;
 }
