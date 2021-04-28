@@ -122,18 +122,26 @@ static void add_fd(int fd) {
   num_fds++;
 }
 
+static void delete_fd(size_t fd_index) {
+  close(pfds[fd_index].fd);
+  pfds[fd_index] = pfds[num_fds + RESERVED_FDS - 1];
+  num_fds--;
+}
 static void scan_fd(size_t fd_index) {
   if (pfds[fd_index].revents & POLLIN) {
     verbose_log("Reading info from %d.\n", pfds[fd_index].fd);
     size_t bytes_read = recv(pfds[fd_index].fd, msg_buf, MSG_BUF_SZ, 0);
 
     if (bytes_read) {
-      for (size_t j = 1; j <= num_fds; j++) {
+      for (size_t j = 0; j < num_fds; j++) {
         if (j != fd_index) {
-          send(pfds[j].fd, msg_buf, bytes_read, 0);
+          send(pfds[j + RESERVED_FDS].fd, msg_buf, bytes_read, 0);
         }
       }
       printf("%.*s", (int)bytes_read, msg_buf);
+    } else {
+      verbose_log("Lost connection from %d.\n", pfds[fd_index].fd);
+      delete_fd(fd_index);
     }
   }
 }
@@ -203,14 +211,14 @@ int main(int argc, char *argv[]) {
     }
 
     if (num_events != 0) {
-      for (size_t i = RESERVED_FDS; i <= num_fds + RESERVED_FDS; i++) {
-        scan_fd(i);
+      for (size_t i = 0; i < num_fds; i++) {
+        scan_fd(i + RESERVED_FDS);
       }
     }
   }
 done:
-  for (size_t i = RESERVED_FDS; i < num_fds + RESERVED_FDS; i++) {
-    close(pfds[i].fd);
+  for (size_t i = 0; i < num_fds; i++) {
+    close(pfds[i + RESERVED_FDS].fd);
   }
 
   close(pfds[0].fd);
