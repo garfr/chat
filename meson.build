@@ -14,13 +14,13 @@ msgpack = dependency('msgpack')
 server = executable(
   'server',
   server_src,
-  c_args : ['-Wextra', '-Werror', '-g', '-std=c99', '-pedantic'],
+  c_args : ['-Wextra', '-Werror', '-g'],
   dependencies: [tls, msgpack],
 )
 
 client = executable(
   'client',
   client_src,
-  c_args : ['-Wextra', '-Werror', '-g', '-std=c99', '-pedantic'],
+  c_args : ['-Wextra', '-Werror', '-g'],
   dependencies: [tls, msgpack],
 )
