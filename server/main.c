@@ -133,9 +133,9 @@ static void scan_fd(size_t fd_index) {
     size_t bytes_read = recv(pfds[fd_index].fd, msg_buf, MSG_BUF_SZ, 0);
 
     if (bytes_read) {
-      for (size_t j = 1; j <= num_fds; j++) {
+      for (size_t j = 0; j < num_fds; j++) {
         if (j != fd_index) {
-          send(pfds[j].fd, msg_buf, bytes_read, 0);
+          send(pfds[j + RESERVED_FDS].fd, msg_buf, bytes_read, 0);
         }
       }
       printf("%.*s", (int)bytes_read, msg_buf);
@@ -211,14 +211,14 @@ int main(int argc, char *argv[]) {
     }
 
     if (num_events != 0) {
-      for (size_t i = RESERVED_FDS; i <= num_fds + RESERVED_FDS; i++) {
-        scan_fd(i);
+      for (size_t i = 0; i < num_fds; i++) {
+        scan_fd(i + RESERVED_FDS);
       }
     }
   }
 done:
-  for (size_t i = RESERVED_FDS; i < num_fds + RESERVED_FDS; i++) {
-    close(pfds[i].fd);
+  for (size_t i = 0; i < num_fds; i++) {
+    close(pfds[i + RESERVED_FDS].fd);
   }
 
   close(pfds[0].fd);
