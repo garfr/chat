@@ -2,6 +2,7 @@
 #include <netdb.h>
 #include <poll.h>
 #include <signal.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,13 +13,30 @@
 #define NUM_FDS 2
 #define IN_MESSAGE_MAX 1000
 #define OUT_MESSAGE_MAX 1000
+
 struct pollfd pfds[NUM_FDS];
+
+int is_verbose = 0;
+
+static void verbose_log(const char* fmt, ...) {
+  va_list args;
+  va_start(args, fmt);
+
+  if (is_verbose) {
+    vprintf(fmt, args);
+  }
+}
 
 int main(int argc, char* argv[]) {
   if (argc < 3) {
     fprintf(stderr, "Format: client [hostname] [port].\n");
     exit(EXIT_FAILURE);
   }
+
+  if (argc >= 4 && strcmp(argv[3], "-v") == 0) {
+    is_verbose = 1;
+  }
+
   struct addrinfo hints;
   struct addrinfo* server_info;
 
@@ -71,17 +89,20 @@ int main(int argc, char* argv[]) {
     }
 
     /* stdin */
-    if (pfds[0].events & POLLIN) {
+    if (pfds[0].revents & POLLIN) {
       stdin_msg_len = read(0, stdin_msg, IN_MESSAGE_MAX);
       has_message = 1;
+      verbose_log("Read message from stdin.\n");
     }
     /* server */
-    if (pfds[1].events & POLLIN) {
+    if (pfds[1].revents & POLLIN) {
       server_msg_len = recv(pfds[1].fd, server_msg, IN_MESSAGE_MAX, 0);
+      verbose_log("Read message from server.\n");
     }
-    if (pfds[1].events & POLLOUT && has_message) {
+    if (pfds[1].revents & POLLOUT && has_message) {
       send(pfds[1].fd, stdin_msg, stdin_msg_len, 0);
       has_message = 0;
+      verbose_log("Sending message to server.\n");
     }
   }
 

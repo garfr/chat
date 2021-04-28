@@ -7,6 +7,7 @@
 #include <paths.h>
 #include <poll.h>
 #include <signal.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,6 +26,17 @@
 uint8_t msg_buf[MSG_BUF_SZ];
 struct pollfd pfds[POLL_MAX_FDS + RESERVED_FDS];
 size_t num_fds;
+
+int is_verbose = 0;
+
+static void verbose_log(const char *fmt, ...) {
+  va_list args;
+  va_start(args, fmt);
+
+  if (is_verbose) {
+    vprintf(fmt, args);
+  }
+}
 
 static int create_socket(int port) {
   struct sockaddr_in6 addr;
@@ -105,11 +117,14 @@ static void add_fd(int fd) {
 
   pfds[num_fds + RESERVED_FDS].fd = fd;
   pfds[num_fds + RESERVED_FDS].events = POLLIN;
+  verbose_log("New connection made on file descriptor: %d.\n", fd);
+
   num_fds++;
 }
 
 static void scan_fd(size_t fd_index) {
   if (pfds[fd_index].revents & POLLIN) {
+    verbose_log("Reading info from %d.\n", pfds[fd_index].fd);
     size_t bytes_read = recv(pfds[fd_index].fd, msg_buf, MSG_BUF_SZ, 0);
 
     if (bytes_read) {
@@ -154,14 +169,21 @@ static void initialize_pfds() {
   pfds[1].events = POLLIN;
 }
 
-int main() {
+int main(int argc, char *argv[]) {
+  if (argc >= 2 && strcmp(argv[1], "-v") == 0) {
+    is_verbose = 1;
+  }
+
   disable_core_dumps();
+  verbose_log("Disabled core dumps.\n");
 
   clean_file_descriptors();
+  verbose_log("Cleared all unwanted file descriptors.\n");
 
   num_fds = 0;
 
   initialize_pfds();
+  verbose_log("Initialized file descriptor list.\n");
 
   while (1) {
     int num_events = poll(pfds, num_fds + RESERVED_FDS, -1);
