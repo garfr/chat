@@ -27,14 +27,15 @@ struct pollfd pfds[POLL_MAX_FDS + RESERVED_FDS];
 size_t num_fds;
 
 static int create_socket(int port) {
-  struct sockaddr_in addr;
-  addr.sin_family = AF_INET; /* IPv4 */
-  addr.sin_port = htons(port);
-  addr.sin_addr.s_addr = htonl(INADDR_ANY);
+  struct sockaddr_in6 addr;
+  addr.sin6_family = AF_INET6; /* IPv6 */
+  addr.sin6_port = htons(port);
+  addr.sin6_addr = in6addr_any;
 
   int option = 1;
-  int fd = socket(addr.sin_family, SOCK_STREAM, 0);
+  int fd = socket(addr.sin6_family, SOCK_STREAM, 0);
   setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
+
   if (fd < 0) {
     fprintf(stderr, "Unable to open socket: %s.\n", strerror(errno));
     exit(EXIT_FAILURE);
