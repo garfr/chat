@@ -122,6 +122,11 @@ static void add_fd(int fd) {
   num_fds++;
 }
 
+static void delete_fd(size_t fd_index) {
+  close(pfds[fd_index].fd);
+  pfds[fd_index] = pfds[num_fds + RESERVED_FDS - 1];
+  num_fds--;
+}
 static void scan_fd(size_t fd_index) {
   if (pfds[fd_index].revents & POLLIN) {
     verbose_log("Reading info from %d.\n", pfds[fd_index].fd);
@@ -134,6 +139,9 @@ static void scan_fd(size_t fd_index) {
         }
       }
       printf("%.*s", (int)bytes_read, msg_buf);
+    } else {
+      verbose_log("Lost connection from %d.\n", pfds[fd_index].fd);
+      delete_fd(fd_index);
     }
   }
 }
