@@ -37,7 +37,7 @@ static int disable_sigint() {
 }
 
 static int create_server_socket(int port) {
-  struct sockaddr_in6 addr;
+  struct sockaddr_in6 addr = {0};
   addr.sin6_family = AF_INET6; /* IPv6 */
   addr.sin6_port = htons(port);
   addr.sin6_addr = in6addr_any;
@@ -68,7 +68,7 @@ static int create_server_socket(int port) {
 void init_net_io() {
   int server_fd = create_server_socket(PORT_USED);
 
-  memset(pfds, 0, sizeof(pfds) * MAX_PFDS);
+  memset(pfds, 0, sizeof(struct pollfd) * MAX_PFDS);
   num_fds = 0;
 
   /* Poll the server_fd to check for new connections */

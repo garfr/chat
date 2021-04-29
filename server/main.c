@@ -91,6 +91,7 @@ int main(int argc, char *argv[]) {
   clean_file_descriptors();
   verbose_log("Cleared all unwanted file descriptors.\n");
 
+  init_net_io();
   user_list_init();
 
   verbose_log("Initialized file descriptor list.\n");
