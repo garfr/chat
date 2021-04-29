@@ -4,6 +4,7 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <limits.h>
+#include <msgpack.h>
 #include <paths.h>
 #include <poll.h>
 #include <signal.h>
@@ -136,13 +137,11 @@ static void scan_fd(size_t fd_index) {
                 (int)bytes_read - 1, msg_buf);
 
     if (bytes_read) {
-      Message msg;
-      msg.t = MSG_MSG;
-      msg.msg = msg_buf;
-      msg.msg_len = bytes_read;
       for (size_t j = 0; j < num_fds; j++) {
+        printf("this.\n");
         if (j + RESERVED_FDS != fd_index) {
-          write_msg(&msg, pfds[j + RESERVED_FDS].fd);
+          printf("this2.\n");
+          write_ping(pfds[j + RESERVED_FDS].fd);
         }
       }
     } else {
