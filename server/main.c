@@ -20,8 +20,8 @@
 #include <unistd.h>
 
 #include "messages.h"
+#include "users.h"
 
-#define PORT_USED 4433
 #define MSG_BUF_SZ 1000
 #define POLL_MAX_FDS 10
 #define RESERVED_FDS 2
@@ -39,35 +39,6 @@ static void verbose_log(const char *fmt, ...) {
   if (is_verbose) {
     vprintf(fmt, args);
   }
-}
-
-static int create_socket(int port) {
-  struct sockaddr_in6 addr;
-  addr.sin6_family = AF_INET6; /* IPv6 */
-  addr.sin6_port = htons(port);
-  addr.sin6_addr = in6addr_any;
-
-  int option = 1;
-  int fd = socket(addr.sin6_family, SOCK_STREAM, 0);
-  setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
-
-  if (fd < 0) {
-    fprintf(stderr, "Unable to open socket: %s.\n", strerror(errno));
-    exit(EXIT_FAILURE);
-  }
-
-  if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-    fprintf(stderr, "Unable to bind to port %d: %s.\n", port, strerror(errno));
-    exit(EXIT_FAILURE);
-  }
-
-  if (listen(fd, 1) < 0) {
-    fprintf(stderr, "Unable to listen on port %d: %s.\n", port,
-            strerror(errno));
-    exit(EXIT_FAILURE);
-  }
-
-  return fd;
 }
 
 /* Associates standard file descriptor with /dev/null */
@@ -151,37 +122,6 @@ static void scan_fd(size_t fd_index) {
   }
 }
 
-static int disable_sigint() {
-  sigset_t sig_mask;
-
-  sigemptyset(&sig_mask);
-  sigaddset(&sig_mask, SIGINT);
-
-  if (sigprocmask(SIG_BLOCK, &sig_mask, NULL) == -1) {
-    fprintf(stderr, "Unable to block sig int handler.\n");
-    exit(EXIT_FAILURE);
-  }
-
-  int sigint_fd = signalfd(-1, &sig_mask, 0);
-  if (sigint_fd == -1) {
-    fprintf(stderr, "Unable to create file descriptor from signal mask: %s.\n",
-            strerror(errno));
-    exit(EXIT_FAILURE);
-  }
-
-  return sigint_fd;
-}
-
-static void initialize_pfds() {
-  int server_fd = create_socket(PORT_USED);
-
-  pfds[0].fd = server_fd;
-  pfds[0].events = POLLIN;
-
-  pfds[1].fd = disable_sigint();
-  pfds[1].events = POLLIN;
-}
-
 int main(int argc, char *argv[]) {
   if (argc >= 2 && strcmp(argv[1], "-v") == 0) {
     is_verbose = 1;
@@ -193,9 +133,10 @@ int main(int argc, char *argv[]) {
   clean_file_descriptors();
   verbose_log("Cleared all unwanted file descriptors.\n");
 
+  user_list_init();
+
   num_fds = 0;
 
-  initialize_pfds();
   verbose_log("Initialized file descriptor list.\n");
 
   while (1) {
