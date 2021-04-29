@@ -7,8 +7,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/signalfd.h>
-#include <sys/socket.h>
-#include <sys/types.h>
 #include <unistd.h>
 
 #define PORT_USED 4433
@@ -52,7 +50,7 @@ static int create_server_socket(int port) {
     exit(EXIT_FAILURE);
   }
 
-  if (bind(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+  if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
     fprintf(stderr, "Unable to bind to port %d: %s.\n", port, strerror(errno));
     exit(EXIT_FAILURE);
   }
@@ -81,7 +79,7 @@ void init_net_io() {
   pfds[1].events = POLLIN;
 }
 
-struct pollfd* io_add_conn(int fd) {
+struct pollfd *io_add_conn(int fd) {
   if (num_fds >= MAX_PFDS) {
     return NULL;
   }
@@ -90,12 +88,12 @@ struct pollfd* io_add_conn(int fd) {
   return &pfds[num_fds++ + RESERVED_FDS];
 }
 
-ssize_t io_get_input(int fd, uint8_t* buf, size_t buf_sz) {
+ssize_t io_get_input(int fd, uint8_t *buf, size_t buf_sz) {
   /* TODO: More fancy stuff */
   return recv(fd, buf, buf_sz, 0);
 }
 
-void io_remove_conn(struct pollfd* sock) {
+void io_remove_conn(struct pollfd *sock) {
   close(sock->fd);
   *sock = pfds[(num_fds + RESERVED_FDS) - 1];
   num_fds--;

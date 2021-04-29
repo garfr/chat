@@ -1,6 +1,5 @@
 #pragma once
 
-#include <poll.h>
 #include <stdint.h>
 #include <string.h>
 

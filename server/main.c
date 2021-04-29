@@ -1,22 +1,10 @@
-#define _POSIX_C_SOURCE 1
-#define _DEFAULT_SOURCE 1
-
-#include <arpa/inet.h>
-#include <errno.h>
-#include <limits.h>
 #include <msgpack.h>
+
+#include <errno.h>
 #include <paths.h>
 #include <poll.h>
-#include <signal.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <sys/resource.h>
-#include <sys/signalfd.h>
-#include <sys/socket.h>
 #include <sys/stat.h>
-#include <sys/types.h>
 #include <unistd.h>
 
 #include "io.h"

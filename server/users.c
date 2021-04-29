@@ -1,5 +1,4 @@
 #include "users.h"
-
 #include "io.h"
 
 User user_list[50];
