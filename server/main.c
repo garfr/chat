@@ -26,6 +26,7 @@
 #define MSG_BUF_SZ 1000
 
 uint8_t msg_buf[MSG_BUF_SZ];
+ssize_t msg_len;
 
 int is_verbose = 0;
 
@@ -80,6 +81,22 @@ static void disable_core_dumps(void) {
   setrlimit(RLIMIT_CORE, &rlim);
 }
 
+static void scan_users() {
+  for (size_t i = 0; i < num_users; i++) {
+    if (user_list[i].sock->revents & POLLIN) {
+      msg_len = io_get_input(user_list[i].sock->fd, msg_buf, MSG_BUF_SZ);
+      if (msg_len == 0) {
+        /* User has disconnected */
+        verbose_log("Removed connection: %d.\n", user_list[i].sock->fd);
+        user_list_remove(i);
+      } else {
+        verbose_log("Recieved message from %d: \"%.*s\".\n",
+                    user_list[i].sock->fd, (int)msg_len - 1, msg_buf);
+      }
+    }
+  }
+}
+
 int main(int argc, char *argv[]) {
   if (argc >= 2 && strcmp(argv[1], "-v") == 0) {
     is_verbose = 1;
@@ -112,7 +129,24 @@ int main(int argc, char *argv[]) {
 
     /* New connection */
     if (pfds[0].revents & POLLIN) {
-      num_events--;
+      int new_conn = accept(pfds[0].fd, NULL, 0);
+      if (new_conn == -1) {
+        fprintf(stderr, "Failed to accept network connection.\n");
+        continue;
+      }
+      struct pollfd *new_fd = io_add_conn(new_conn);
+
+      if (!new_fd) {
+        fprintf(stderr, "Failed to add new connection to pfds.\n");
+      } else {
+        user_list_add(new_fd, NULL, 0);
+        verbose_log("Added new user: %d.\n", new_conn);
+      }
+      num_events--; /* This doesn't count as a true "event" */
+    }
+
+    if (num_events) {
+      scan_users();
     }
   }
 done:
