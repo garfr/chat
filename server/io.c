@@ -12,6 +12,9 @@
 
 #define PORT_USED 4433
 
+struct pollfd pfds[MAX_PFDS + RESERVED_FDS];
+size_t num_fds;
+
 static int disable_sigint() {
   sigset_t sig_mask;
 
@@ -48,7 +51,7 @@ static int create_server_socket(int port) {
     exit(EXIT_FAILURE);
   }
 
-  if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+  if (bind(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
     fprintf(stderr, "Unable to bind to port %d: %s.\n", port, strerror(errno));
     exit(EXIT_FAILURE);
   }
@@ -65,6 +68,9 @@ static int create_server_socket(int port) {
 void init_net_io() {
   int server_fd = create_server_socket(PORT_USED);
 
+  memset(pfds, 0, sizeof(pfds) * MAX_PFDS);
+  num_fds = 0;
+
   /* Poll the server_fd to check for new connections */
   pfds[0].fd = server_fd;
   pfds[0].events = POLLIN;
@@ -72,4 +78,13 @@ void init_net_io() {
   /* Poll for SIGINT so it can be handled properly */
   pfds[1].fd = disable_sigint();
   pfds[1].events = POLLIN;
+}
+
+struct pollfd* io_add_conn(int fd) {
+  if (num_fds >= MAX_PFDS) {
+    return NULL;
+  }
+  pfds[num_fds].fd = fd;
+  pfds[num_fds].events = POLLIN;
+  return &pfds[num_fds++];
 }

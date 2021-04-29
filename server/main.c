@@ -19,16 +19,13 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "io.h"
 #include "messages.h"
 #include "users.h"
 
 #define MSG_BUF_SZ 1000
-#define POLL_MAX_FDS 10
-#define RESERVED_FDS 2
 
 uint8_t msg_buf[MSG_BUF_SZ];
-struct pollfd pfds[POLL_MAX_FDS + RESERVED_FDS];
-size_t num_fds;
 
 int is_verbose = 0;
 
@@ -83,45 +80,6 @@ static void disable_core_dumps(void) {
   setrlimit(RLIMIT_CORE, &rlim);
 }
 
-static void add_fd(int fd) {
-  if (num_fds >= POLL_MAX_FDS) {
-    printf("Max number of file descriptors reached.\n");
-    exit(EXIT_FAILURE);
-  }
-
-  pfds[num_fds + RESERVED_FDS].fd = fd;
-  pfds[num_fds + RESERVED_FDS].events = POLLIN;
-  verbose_log("New connection made on file descriptor: %d.\n", fd);
-
-  num_fds++;
-}
-
-static void delete_fd(size_t fd_index) {
-  close(pfds[fd_index].fd);
-  pfds[fd_index] = pfds[num_fds + RESERVED_FDS - 1];
-  num_fds--;
-}
-static void scan_fd(size_t fd_index) {
-  if (pfds[fd_index].revents & POLLIN) {
-    size_t bytes_read = recv(pfds[fd_index].fd, msg_buf, MSG_BUF_SZ, 0);
-    verbose_log("Message recieved from %d: \"%.*s\".\n", pfds[fd_index].fd,
-                (int)bytes_read - 1, msg_buf);
-
-    if (bytes_read) {
-      for (size_t j = 0; j < num_fds; j++) {
-        printf("this.\n");
-        if (j + RESERVED_FDS != fd_index) {
-          printf("this2.\n");
-          write_ping(pfds[j + RESERVED_FDS].fd);
-        }
-      }
-    } else {
-      verbose_log("Lost connection from %d.\n", pfds[fd_index].fd);
-      delete_fd(fd_index);
-    }
-  }
-}
-
 int main(int argc, char *argv[]) {
   if (argc >= 2 && strcmp(argv[1], "-v") == 0) {
     is_verbose = 1;
@@ -135,8 +93,6 @@ int main(int argc, char *argv[]) {
 
   user_list_init();
 
-  num_fds = 0;
-
   verbose_log("Initialized file descriptor list.\n");
 
   while (1) {
@@ -148,25 +104,17 @@ int main(int argc, char *argv[]) {
       exit(EXIT_FAILURE);
     }
 
+    /* SIGINT has occured */
     if (pfds[1].revents & POLLIN) {
       goto done;
     }
-    if (pfds[0].revents & POLLIN) {
-      add_fd(accept(pfds[0].fd, NULL, 0));
-      num_events--;
-    }
 
-    if (num_events != 0) {
-      for (size_t i = 0; i < num_fds; i++) {
-        scan_fd(i + RESERVED_FDS);
-      }
+    /* New connection */
+    if (pfds[0].revents & POLLIN) {
+      num_events--;
     }
   }
 done:
-  for (size_t i = 0; i < num_fds; i++) {
-    close(pfds[i + RESERVED_FDS].fd);
-  }
-
   close(pfds[0].fd);
   return 0;
 }
