@@ -19,7 +19,7 @@ struct pollfd pfds[NUM_FDS];
 
 int is_verbose = 0;
 
-static void verbose_log(const char* fmt, ...) {
+static void verbose_log(const char *fmt, ...) {
   va_list args;
   va_start(args, fmt);
 
@@ -28,7 +28,7 @@ static void verbose_log(const char* fmt, ...) {
   }
 }
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
   if (argc < 3) {
     fprintf(stderr, "Format: client [hostname] [port].\n");
     exit(EXIT_FAILURE);
@@ -39,12 +39,12 @@ int main(int argc, char* argv[]) {
   }
 
   struct addrinfo hints;
-  struct addrinfo* server_info;
+  struct addrinfo *server_info;
 
   memset(&hints, 0, sizeof(struct addrinfo));
   hints.ai_family = AF_INET6;
   hints.ai_socktype = SOCK_STREAM;
-  const char* domain_name = argv[1];
+  const char *domain_name = argv[1];
   if (strcmp(argv[1], "localhost") == 0) {
     argv[1] = NULL;
     hints.ai_flags = AI_PASSIVE;
@@ -105,10 +105,17 @@ int main(int argc, char* argv[]) {
     }
     /* server */
     if (pfds[2].revents & POLLIN) {
-      printf("Message input.\n");
       server_msg_len = recv(pfds[2].fd, server_msg, IN_MESSAGE_MAX, 0);
 
-      msgpack_unpacker* unpck = msgpack_unpacker_new(server_msg_len);
+      if (server_msg_len == 0) {
+        verbose_log("Connection with server lost.\n");
+        goto server_closed;
+      } else if (server_msg_len == -1) {
+        printf("Error reading from server: %s.\n", strerror(errno));
+        goto server_closed;
+      }
+
+      msgpack_unpacker *unpck = msgpack_unpacker_new(server_msg_len);
       if (msgpack_unpacker_buffer_capacity(unpck) < (size_t)server_msg_len) {
         msgpack_unpacker_reserve_buffer(unpck, server_msg_len);
       }
@@ -124,13 +131,6 @@ int main(int argc, char* argv[]) {
       msgpack_object obj = und.data;
       printf("obj type: %d\n", obj.type);
 
-      if (server_msg_len == 0) {
-        verbose_log("Connection with server lost.\n");
-        goto server_closed;
-      } else if (server_msg_len == -1) {
-        printf("Error reading from server: %s.\n", strerror(errno));
-        goto server_closed;
-      }
       verbose_log("Read message from server %d.\n", server_msg_len);
       message_received = 1;
     }
