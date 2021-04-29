@@ -9,6 +9,7 @@
 #include <sys/signalfd.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <unistd.h>
 
 #define PORT_USED 4433
 
@@ -84,7 +85,18 @@ struct pollfd* io_add_conn(int fd) {
   if (num_fds >= MAX_PFDS) {
     return NULL;
   }
-  pfds[num_fds].fd = fd;
-  pfds[num_fds].events = POLLIN;
-  return &pfds[num_fds++];
+  pfds[num_fds + RESERVED_FDS].fd = fd;
+  pfds[num_fds + RESERVED_FDS].events = POLLIN;
+  return &pfds[num_fds++ + RESERVED_FDS];
+}
+
+ssize_t io_get_input(int fd, uint8_t* buf, size_t buf_sz) {
+  /* TODO: More fancy stuff */
+  return recv(fd, buf, buf_sz, 0);
+}
+
+void io_remove_conn(struct pollfd* sock) {
+  close(sock->fd);
+  *sock = pfds[(num_fds + RESERVED_FDS) - 1];
+  num_fds--;
 }
