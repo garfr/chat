@@ -2,6 +2,7 @@ project('chat', 'c')
 
 server_src = [
   'server/main.c',
+  'server/messages.c',
 ]
 
 client_src = [
