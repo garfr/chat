@@ -1,4 +1,5 @@
 #include <errno.h>
+#include <msgpack.h>
 #include <netdb.h>
 #include <poll.h>
 #include <signal.h>
@@ -104,7 +105,25 @@ int main(int argc, char* argv[]) {
     }
     /* server */
     if (pfds[2].revents & POLLIN) {
+      printf("Message input.\n");
       server_msg_len = recv(pfds[2].fd, server_msg, IN_MESSAGE_MAX, 0);
+
+      msgpack_unpacker* unpck = msgpack_unpacker_new(server_msg_len);
+      if (msgpack_unpacker_buffer_capacity(unpck) < (size_t)server_msg_len) {
+        msgpack_unpacker_reserve_buffer(unpck, server_msg_len);
+      }
+
+      memcpy(msgpack_unpacker_buffer(unpck), server_msg, server_msg_len);
+      msgpack_unpacker_buffer_consumed(unpck, server_msg_len);
+
+      msgpack_unpacked und;
+      msgpack_unpacked_init(&und);
+
+      msgpack_unpacker_next(unpck, &und);
+
+      msgpack_object obj = und.data;
+      printf("obj type: %d\n", obj.type);
+
       if (server_msg_len == 0) {
         verbose_log("Connection with server lost.\n");
         goto server_closed;

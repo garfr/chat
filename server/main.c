@@ -4,6 +4,7 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <limits.h>
+#include <msgpack.h>
 #include <paths.h>
 #include <poll.h>
 #include <signal.h>
@@ -18,14 +19,14 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#define PORT_USED 4433
+#include "io.h"
+#include "messages.h"
+#include "users.h"
+
 #define MSG_BUF_SZ 1000
-#define POLL_MAX_FDS 10
-#define RESERVED_FDS 2
 
 uint8_t msg_buf[MSG_BUF_SZ];
-struct pollfd pfds[POLL_MAX_FDS + RESERVED_FDS];
-size_t num_fds;
+ssize_t msg_len;
 
 int is_verbose = 0;
 
@@ -36,35 +37,6 @@ static void verbose_log(const char *fmt, ...) {
   if (is_verbose) {
     vprintf(fmt, args);
   }
-}
-
-static int create_socket(int port) {
-  struct sockaddr_in6 addr;
-  addr.sin6_family = AF_INET6; /* IPv6 */
-  addr.sin6_port = htons(port);
-  addr.sin6_addr = in6addr_any;
-
-  int option = 1;
-  int fd = socket(addr.sin6_family, SOCK_STREAM, 0);
-  setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
-
-  if (fd < 0) {
-    fprintf(stderr, "Unable to open socket: %s.\n", strerror(errno));
-    exit(EXIT_FAILURE);
-  }
-
-  if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-    fprintf(stderr, "Unable to bind to port %d: %s.\n", port, strerror(errno));
-    exit(EXIT_FAILURE);
-  }
-
-  if (listen(fd, 1) < 0) {
-    fprintf(stderr, "Unable to listen on port %d: %s.\n", port,
-            strerror(errno));
-    exit(EXIT_FAILURE);
-  }
-
-  return fd;
 }
 
 /* Associates standard file descriptor with /dev/null */
@@ -109,72 +81,20 @@ static void disable_core_dumps(void) {
   setrlimit(RLIMIT_CORE, &rlim);
 }
 
-static void add_fd(int fd) {
-  if (num_fds >= POLL_MAX_FDS) {
-    printf("Max number of file descriptors reached.\n");
-    exit(EXIT_FAILURE);
-  }
-
-  pfds[num_fds + RESERVED_FDS].fd = fd;
-  pfds[num_fds + RESERVED_FDS].events = POLLIN;
-  verbose_log("New connection made on file descriptor: %d.\n", fd);
-
-  num_fds++;
-}
-
-static void delete_fd(size_t fd_index) {
-  close(pfds[fd_index].fd);
-  pfds[fd_index] = pfds[num_fds + RESERVED_FDS - 1];
-  num_fds--;
-}
-static void scan_fd(size_t fd_index) {
-  if (pfds[fd_index].revents & POLLIN) {
-    verbose_log("Reading info from %d.\n", pfds[fd_index].fd);
-    size_t bytes_read = recv(pfds[fd_index].fd, msg_buf, MSG_BUF_SZ, 0);
-
-    if (bytes_read) {
-      for (size_t j = 0; j < num_fds; j++) {
-        if (j != fd_index) {
-          send(pfds[j + RESERVED_FDS].fd, msg_buf, bytes_read, 0);
-        }
+static void scan_users() {
+  for (size_t i = 0; i < num_users; i++) {
+    if (user_list[i].sock->revents & POLLIN) {
+      msg_len = io_get_input(user_list[i].sock->fd, msg_buf, MSG_BUF_SZ);
+      if (msg_len == 0) {
+        /* User has disconnected */
+        verbose_log("Removed connection: %d.\n", user_list[i].sock->fd);
+        user_list_remove(i);
+      } else {
+        verbose_log("Recieved message from %d: \"%.*s\".\n",
+                    user_list[i].sock->fd, (int)msg_len - 1, msg_buf);
       }
-      printf("%.*s", (int)bytes_read, msg_buf);
-    } else {
-      verbose_log("Lost connection from %d.\n", pfds[fd_index].fd);
-      delete_fd(fd_index);
     }
   }
-}
-
-static int disable_sigint() {
-  sigset_t sig_mask;
-
-  sigemptyset(&sig_mask);
-  sigaddset(&sig_mask, SIGINT);
-
-  if (sigprocmask(SIG_BLOCK, &sig_mask, NULL) == -1) {
-    fprintf(stderr, "Unable to block sig int handler.\n");
-    exit(EXIT_FAILURE);
-  }
-
-  int sigint_fd = signalfd(-1, &sig_mask, 0);
-  if (sigint_fd == -1) {
-    fprintf(stderr, "Unable to create file descriptor from signal mask: %s.\n",
-            strerror(errno));
-    exit(EXIT_FAILURE);
-  }
-
-  return sigint_fd;
-}
-
-static void initialize_pfds() {
-  int server_fd = create_socket(PORT_USED);
-
-  pfds[0].fd = server_fd;
-  pfds[0].events = POLLIN;
-
-  pfds[1].fd = disable_sigint();
-  pfds[1].events = POLLIN;
 }
 
 int main(int argc, char *argv[]) {
@@ -188,9 +108,9 @@ int main(int argc, char *argv[]) {
   clean_file_descriptors();
   verbose_log("Cleared all unwanted file descriptors.\n");
 
-  num_fds = 0;
+  init_net_io();
+  user_list_init();
 
-  initialize_pfds();
   verbose_log("Initialized file descriptor list.\n");
 
   while (1) {
@@ -202,25 +122,34 @@ int main(int argc, char *argv[]) {
       exit(EXIT_FAILURE);
     }
 
+    /* SIGINT has occured */
     if (pfds[1].revents & POLLIN) {
       goto done;
     }
+
+    /* New connection */
     if (pfds[0].revents & POLLIN) {
-      add_fd(accept(pfds[0].fd, NULL, 0));
-      num_events--;
+      int new_conn = accept(pfds[0].fd, NULL, 0);
+      if (new_conn == -1) {
+        fprintf(stderr, "Failed to accept network connection.\n");
+        continue;
+      }
+      struct pollfd *new_fd = io_add_conn(new_conn);
+
+      if (!new_fd) {
+        fprintf(stderr, "Failed to add new connection to pfds.\n");
+      } else {
+        user_list_add(new_fd, NULL, 0);
+        verbose_log("Added new user: %d.\n", new_conn);
+      }
+      num_events--; /* This doesn't count as a true "event" */
     }
 
-    if (num_events != 0) {
-      for (size_t i = 0; i < num_fds; i++) {
-        scan_fd(i + RESERVED_FDS);
-      }
+    if (num_events) {
+      scan_users();
     }
   }
 done:
-  for (size_t i = 0; i < num_fds; i++) {
-    close(pfds[i + RESERVED_FDS].fd);
-  }
-
   close(pfds[0].fd);
   return 0;
 }
