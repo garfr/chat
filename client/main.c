@@ -1,7 +1,10 @@
-#include <msgpack.h>
+#include <jansson.h>
 
 #include <errno.h>
 #include <netdb.h>
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
 #include <poll.h>
 #include <stdarg.h>
 #include <unistd.h>
@@ -109,25 +112,8 @@ int main(int argc, char *argv[]) {
         printf("Error reading from server: %s.\n", strerror(errno));
         goto server_closed;
       }
-
-      msgpack_unpacker *unpck = msgpack_unpacker_new(server_msg_len);
-      if (msgpack_unpacker_buffer_capacity(unpck) < (size_t)server_msg_len) {
-        msgpack_unpacker_reserve_buffer(unpck, server_msg_len);
-      }
-
-      memcpy(msgpack_unpacker_buffer(unpck), server_msg, server_msg_len);
-      msgpack_unpacker_buffer_consumed(unpck, server_msg_len);
-
-      msgpack_unpacked und;
-      msgpack_unpacked_init(&und);
-
-      msgpack_unpacker_next(unpck, &und);
-
-      msgpack_object obj = und.data;
-      printf("obj type: %d\n", obj.type);
-
-      verbose_log("Read message from server %d.\n", server_msg_len);
-      message_received = 1;
+      verbose_log("Read message from server %d: \"%s\".\n", pfds[2].fd,
+                  (int)server_msg_len - 1, server_msg);
     }
     if ((pfds[2].revents & POLLOUT) && message_prepared) {
       send(pfds[2].fd, stdin_msg, stdin_msg_len, 0);

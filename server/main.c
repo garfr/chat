@@ -1,6 +1,10 @@
-#include <msgpack.h>
+#include <jansson.h>
 
 #include <errno.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+#include <sys/socket.h>
 #include <paths.h>
 #include <poll.h>
 #include <sys/resource.h>

@@ -16,7 +16,7 @@ common_src = [
 
 tls = dependency('libtls')
 
-msgpack = dependency('msgpack')
+jansson = dependency('jansson')
 
 common_inc = include_directories('common')
 common_inner_inc = include_directories('common/common')
@@ -25,7 +25,7 @@ common = static_library(
   'common',
   common_src,
   c_args : ['-Wextra','-Wall', '-Werror', '-g'],
-  dependencies: [msgpack],
+  dependencies: [jansson],
   include_directories: common_inner_inc,
 )
 
@@ -33,7 +33,7 @@ server = executable(
   'server',
   server_src,
   c_args : ['-Wextra', '-Wall', '-Werror', '-g'],
-  dependencies: [tls, msgpack],
+  dependencies: [tls, jansson],
   link_with: common,
   include_directories: common_inc,
 )
@@ -42,7 +42,7 @@ client = executable(
   'client',
   client_src,
   c_args : ['-Wextra', '-Wall', '-Werror', '-g'],
-  dependencies: [tls, msgpack],
+  dependencies: [tls, jansson],
   link_with: common,
   include_directories: common_inc,
 )
