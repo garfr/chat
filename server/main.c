@@ -22,29 +22,22 @@
 #include "io.h"
 #include "messages.h"
 #include "users.h"
+#include "common/helpers.h"
 
 #define MSG_BUF_SZ 1000
 
 uint8_t msg_buf[MSG_BUF_SZ];
 ssize_t msg_len;
 
-int is_verbose = 0;
-
-static void verbose_log(const char *fmt, ...) {
-  va_list args;
-  va_start(args, fmt);
-
-  if (is_verbose) {
-    vprintf(fmt, args);
-  }
-}
-
 /* Associates standard file descriptor with /dev/null */
 static int open_devnull(int fd) {
   FILE *f = 0;
-  if (fd == 0) f = freopen(_PATH_DEVNULL, "rb", stdin);
-  if (fd == 1) f = freopen(_PATH_DEVNULL, "wb", stdout);
-  if (fd == 2) f = freopen(_PATH_DEVNULL, "wb", stderr);
+  if (fd == 0)
+    f = freopen(_PATH_DEVNULL, "rb", stdin);
+  if (fd == 1)
+    f = freopen(_PATH_DEVNULL, "wb", stdout);
+  if (fd == 2)
+    f = freopen(_PATH_DEVNULL, "wb", stderr);
   return (f && fileno(f) == fd);
 }
 
@@ -56,7 +49,8 @@ static void clean_file_descriptors(void) {
 
   /* If it returns -1, there are more open file descriptors than can be stored
    */
-  if ((fds = getdtablesize()) == -1) fds = FOPEN_MAX;
+  if ((fds = getdtablesize()) == -1)
+    fds = FOPEN_MAX;
 
   /* Starting from the descriptor after stderr, close every open file descriptor
    */
@@ -99,7 +93,7 @@ static void scan_users() {
 
 int main(int argc, char *argv[]) {
   if (argc >= 2 && strcmp(argv[1], "-v") == 0) {
-    is_verbose = 1;
+    enable_verbose();
   }
 
   disable_core_dumps();
