@@ -8,7 +8,6 @@
 #include <unistd.h>
 
 #include "io.h"
-#include "messages.h"
 #include "users.h"
 #include "common/helpers.h"
 
