@@ -1,5 +1,3 @@
-#include <jansson.h>
-
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,7 +11,9 @@
 
 #include "io.h"
 #include "users.h"
+
 #include "common/helpers.h"
+#include "common/message.h"
 
 #define MSG_BUF_SZ 1000
 
@@ -77,6 +77,17 @@ static void scan_users() {
       } else {
         verbose_log("Recieved message from %d: \"%.*s\".\n",
                     user_list[i].sock->fd, (int)msg_len - 1, msg_buf);
+
+        Message msg = {.t = MSG_MSG};
+        msg.msg = msg_buf;
+        msg.msg_len = msg_len - 1;
+        const uint8_t *text = encode_message(&msg);
+        if (!text) {
+          fprintf(stderr, "Error encoding JSON object.\n");
+          exit(EXIT_FAILURE);
+        }
+        printf("%s\n", text);
+        free((uint8_t *)text);
       }
     }
   }

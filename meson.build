@@ -12,6 +12,7 @@ client_src = [
 
 common_src = [
   'common/helpers.c',
+  'common/message.c',
 ]
 
 tls = dependency('libtls')
