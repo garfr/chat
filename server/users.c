@@ -3,7 +3,7 @@
 User user_list[50];
 size_t num_users;
 
-User user_create(int sock, const uint8_t name[MAX_USERNAME_LEN + 1]) {
+User user_create(struct pfds* sock, const uint8_t name[MAX_USERNAME_LEN + 1]) {
   User ret = {.sock = sock};
   memcpy(ret.name, name, MAX_USERNAME_LEN + 1);
   return ret;
