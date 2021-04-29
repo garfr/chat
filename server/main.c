@@ -18,6 +18,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "messages.h"
+
 #define PORT_USED 4433
 #define MSG_BUF_SZ 1000
 #define POLL_MAX_FDS 10
@@ -129,16 +131,20 @@ static void delete_fd(size_t fd_index) {
 }
 static void scan_fd(size_t fd_index) {
   if (pfds[fd_index].revents & POLLIN) {
-    verbose_log("Reading info from %d.\n", pfds[fd_index].fd);
     size_t bytes_read = recv(pfds[fd_index].fd, msg_buf, MSG_BUF_SZ, 0);
+    verbose_log("Message recieved from %d: \"%.*s\".\n", pfds[fd_index].fd,
+                (int)bytes_read - 1, msg_buf);
 
     if (bytes_read) {
+      Message msg;
+      msg.t = MSG_MSG;
+      msg.msg = msg_buf;
+      msg.msg_len = bytes_read;
       for (size_t j = 0; j < num_fds; j++) {
-        if (j != fd_index) {
-          send(pfds[j + RESERVED_FDS].fd, msg_buf, bytes_read, 0);
+        if (j + RESERVED_FDS != fd_index) {
+          write_msg(&msg, pfds[j + RESERVED_FDS].fd);
         }
       }
-      printf("%.*s", (int)bytes_read, msg_buf);
     } else {
       verbose_log("Lost connection from %d.\n", pfds[fd_index].fd);
       delete_fd(fd_index);
