@@ -23,54 +23,31 @@ const uint8_t *encode_message(Message *msg) {
       exit(EXIT_FAILURE);
   }
   const uint8_t *ret = (uint8_t *)json_dumps(obj, 0);
-  json_object_clear(obj);
+  json_array_clear(obj);
   json_decref(obj);
   return ret;
 }
 
 Message decode_message(const uint8_t *msg, size_t len) {
   json_error_t err;
-  json_t *obj = json_loads((const char *)msg, len, &err);
+  json_t *obj = json_loadb((const char *)msg, len, 0, &err);
+  if (obj == NULL) {
+    printf("Invalid json object: \"%s\"\n", err.text);
+  }
 
-  if (obj) {
-    if (!json_is_array(obj)) {
-      fprintf(stderr, "Expected array JSON object.\n");
-      exit(EXIT_FAILURE);
-    }
-
-    json_t *type = json_array_get(obj, 0);
-    if (!json_is_integer(type)) {
-      fprintf(stderr, "Expected message type.\n");
-      exit(EXIT_FAILURE);
-    }
-
-    int t = json_integer_value(type);
-    json_decref(type);
-
-    Message ret;
-    ret.t = t;
-    switch (t) {
-      case MSG_PING:
-      case MSG_PONG:
-        break;
-      case MSG_MSG:
-        {
-          json_t *msg = json_array_get(obj, 1);
-          if (!json_is_string(msg)) {
-            fprintf(stderr, "Expected message type.\n");
-            exit(EXIT_FAILURE);
-          }
-          const uint8_t *temp_str = (const uint8_t *)json_string_value(msg);
-          size_t len = json_string_length(msg);
-          uint8_t *new_str = calloc(len, sizeof(uint8_t));
-          memcpy(new_str, temp_str, len);
-          ret.msg = new_str;
-          ret.msg_len = len;
-        }
-    }
+  Message ret = {0};
+  if (json_unpack(obj, "[i]", &ret.t) == 0) {
+    json_decref(obj);
+    return ret;
+  }
+  const uint8_t *temp_str;
+  if (json_unpack(obj, "[is%]", &ret.t, &temp_str, &ret.msg_len) == 0) {
+    ret.msg = calloc(ret.msg_len, sizeof(uint8_t));
+    memcpy((uint8_t *)ret.msg, temp_str, len);
+    json_decref(obj);
     return ret;
   } else {
-    fprintf(stderr, "Invalid JSON received.\n");
+    fprintf(stderr, "Invalid json message.\n");
     exit(EXIT_FAILURE);
   }
 }

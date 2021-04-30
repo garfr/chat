@@ -7,6 +7,8 @@
 #include <stdarg.h>
 #include <unistd.h>
 
+#include "common/message.h"
+
 #define NUM_FDS 3
 #define IN_MESSAGE_MAX 1000
 #define OUT_MESSAGE_MAX 1000
@@ -112,6 +114,8 @@ int main(int argc, char *argv[]) {
       }
       verbose_log("Read message from server %d: \"%.*s\".\n", pfds[2].fd,
                   (int)server_msg_len, server_msg);
+      Message msg = decode_message(server_msg, server_msg_len);
+      (void)msg;
     }
     if ((pfds[2].revents & POLLOUT) && message_prepared) {
       send(pfds[2].fd, stdin_msg, stdin_msg_len, 0);
