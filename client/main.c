@@ -2,28 +2,41 @@
 #include <netdb.h>
 #include <string.h>
 #include <stdlib.h>
+#include <sys/signalfd.h>
 #include <stdio.h>
 #include <poll.h>
 #include <stdarg.h>
 #include <unistd.h>
+#include <signal.h>
 
 #include "common/message.h"
+#include "common/helpers.h"
 
-#define NUM_FDS 3
+#define NUM_FDS 4
 #define IN_MESSAGE_MAX 1000
 #define OUT_MESSAGE_MAX 1000
 
 struct pollfd pfds[NUM_FDS];
 
-int is_verbose = 0;
+static int disable_sigint() {
+  sigset_t sig_mask;
 
-static void verbose_log(const char *fmt, ...) {
-  va_list args;
-  va_start(args, fmt);
+  sigemptyset(&sig_mask);
+  sigaddset(&sig_mask, SIGINT);
 
-  if (is_verbose) {
-    vprintf(fmt, args);
+  if (sigprocmask(SIG_BLOCK, &sig_mask, NULL) == -1) {
+    fprintf(stderr, "Unable to block sig int handler.\n");
+    exit(EXIT_FAILURE);
   }
+
+  int sigint_fd = signalfd(-1, &sig_mask, 0);
+  if (sigint_fd == -1) {
+    fprintf(stderr, "Unable to create file descriptor from signal mask: %s.\n",
+            strerror(errno));
+    exit(EXIT_FAILURE);
+  }
+
+  return sigint_fd;
 }
 
 int main(int argc, char *argv[]) {
@@ -33,7 +46,7 @@ int main(int argc, char *argv[]) {
   }
 
   if (argc >= 4 && strcmp(argv[3], "-v") == 0) {
-    is_verbose = 1;
+    enable_verbose();
   }
 
   struct addrinfo hints;
@@ -73,6 +86,8 @@ int main(int argc, char *argv[]) {
   pfds[1].events = POLLOUT;
   pfds[2].fd = conn_fd;
   pfds[2].events = POLLIN | POLLOUT;
+  pfds[3].fd = disable_sigint();
+  pfds[3].events = POLLIN;
 
   int message_prepared = 0;
   int message_received = 0;
@@ -122,11 +137,16 @@ int main(int argc, char *argv[]) {
       message_prepared = 0;
       verbose_log("Sending message to server.\n");
     }
+    if ((pfds[3].revents & POLLIN)) {
+      verbose_log("SIGINT polled and caught.\n");
+      goto server_closed;
+    }
   }
 
 server_closed:
 
   close(conn_fd);
 
+  printf("here\n");
   freeaddrinfo(server_info);
 }
