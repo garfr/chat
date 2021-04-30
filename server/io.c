@@ -98,3 +98,7 @@ void io_remove_conn(struct pollfd *sock) {
   *sock = pfds[(num_fds + RESERVED_FDS) - 1];
   num_fds--;
 }
+
+ssize_t io_write_output(int fd, const uint8_t *buf, size_t buf_sz) {
+  return send(fd, buf, buf_sz, 0);
+}

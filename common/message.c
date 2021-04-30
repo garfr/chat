@@ -7,7 +7,6 @@
 #include "message.h"
 
 const uint8_t *encode_message(Message *msg) {
-  printf("called.\n");
   json_t *obj;
   switch (msg->t) {
     case MSG_PING:

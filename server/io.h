@@ -16,3 +16,4 @@ struct pollfd *io_add_conn(int fd);
 void io_remove_conn(struct pollfd *sock);
 
 ssize_t io_get_input(int fd, uint8_t *buf, size_t buf_sz);
+ssize_t io_write_output(int fd, const uint8_t *buf, size_t buf_sz);

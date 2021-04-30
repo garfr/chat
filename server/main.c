@@ -86,7 +86,11 @@ static void scan_users() {
           fprintf(stderr, "Error encoding JSON object.\n");
           exit(EXIT_FAILURE);
         }
-        printf("%s\n", text);
+        for (size_t j = 0; j < num_users; j++) {
+          if (user_list[i].sock->fd != user_list[j].sock->fd) {
+            io_write_output(user_list[j].sock->fd, text, strlen((char *)text));
+          }
+        }
         free((uint8_t *)text);
       }
     }

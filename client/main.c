@@ -110,8 +110,8 @@ int main(int argc, char *argv[]) {
         printf("Error reading from server: %s.\n", strerror(errno));
         goto server_closed;
       }
-      verbose_log("Read message from server %d: \"%s\".\n", pfds[2].fd,
-                  (int)server_msg_len - 1, server_msg);
+      verbose_log("Read message from server %d: \"%.*s\".\n", pfds[2].fd,
+                  (int)server_msg_len, server_msg);
     }
     if ((pfds[2].revents & POLLOUT) && message_prepared) {
       send(pfds[2].fd, stdin_msg, stdin_msg_len, 0);
